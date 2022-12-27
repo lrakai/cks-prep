@@ -1,10 +1,39 @@
+## GCP Provisioning
+
+### Setup
+
+1. Create a `infra/vars.sh` file with the following structure:
+
+    ```sh
+    #!/usr/bin/env bash
+    export GOOGLE_PROJECT={replace_with_your_gcp_project_id}
+    ```
+
+2. Source the variables, create cluster key, and deploy:
+
+    ```sh
+    source infra/vars.sh
+    ssh-keygen -t rsa -q -f "infra/key/cluster" -N ""
+    terraform -chdir=infra init
+    terraform -chdir=infra apply -auto-approve -var your_ip=$(curl -s ifconfig.me) -var project_id=$GOOGLE_PROJECT -var user=$USER
+    echo -en "Connect with\n\n$(terraform -chdir=infra output -raw control_plane_ssh_command)\n\n"
+    ```
+
+### Teardown
+
+```sh
+terraform -chdir=infra destroy -auto-approve -var your_ip=$(curl -s ifconfig.me) -var project_id=$GOOGLE_PROJECT -var user=$USER
+```
+
+## Domains
+
 ### 10% - Cluster Setup
 - Use Network security policies to restrict cluster level access
     - network policy
 - Use CIS benchmark to review the security configuration of Kubernetes components (etcd, kubelet, kubedns, kubeapi)
     - for kubeadm install, Knowing how to configure and secure the Kubernetes components is vital to use functionality such as admission controllers, RBAC and avoid a setup where --anonymous-auth was set to true.
 - Properly set up Ingress objects with security control
-    - Questions could include adding TLS to a previousingress object or setting up an IngressClass
+    - Questions could include adding TLS to a previous ingress object or setting up an IngressClass
         - The TLS secret must contain keys named tls.crt and tls.key
 - Protect node metadata and endpoints
     - maybe disable kubelet --read-only-port [deprecated]
@@ -28,10 +57,24 @@
 - Appropriately use kernel hardening tools such as AppArmor, seccomp
 
 ### 20% - Minimize Microservice Vulnerabilities
-- Setup appropriate OS level security domains e.g. using PSP, OPA, security contexts
+- Setup appropriate OS level security domains 
+    - e.g. using PSP, OPA, security contexts
 - Manage kubernetes secrets
 - Use container runtime sandboxes in multi-tenant environments (e.g. gvisor, kata containers)
     - 'runtimeClassName:' of PodSpec
+        ```yaml
+        apiVersion: node.k8s.io/v1beta1
+        kind: RuntimeClass
+        metadata:
+        name: gvisor
+        handler: runsc
+        ```
+    - 'runtimeClassName:' of PodSpec
+        ```yaml
+        spec:
+            runtimeClassName: gvisor #<<--This must match the name of the runtime above
+            containers:
+        ```
 - Implement pod to pod encryption by use of mTLS
 
 ### 20% - Supply Chain Security
