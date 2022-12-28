@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
 set -xe
-
-gcloud beta runtime-config configs waiters create control-plane-waiter --config-name=k8s-config --async \
-  --timeout=25m --success-cardinality-path=/success --success-cardinality-number=1
-
 export kubernetes_minor_version=${kubernetes_minor_version}
 export kubernetes_community_ami_version=${kubernetes_community_ami_version}
 # containerd https://kubernetes.io/docs/setup/production-environment/container-runtimes/
@@ -71,65 +67,30 @@ chown -R ${user}:${user} /home/${user}/.ssh/
 chmod -R 600 /home/${user}/.ssh/*
 chmod 755 /home/${user}/.ssh
 
-cat >/tmp/kubeadm.yaml <<EOF
+cat >/tmp/kubeadm-node.yaml <<EOF
 ---
-apiVersion: kubeadm.k8s.io/v1beta3
-kind: InitConfiguration
-bootstrapTokens:
-- groups:
-  - "system:bootstrappers:kubeadm:default-node-token"
-  token: "lv9h5t.dsk5x4o9tcznifkl"
-  ttl: "0s"
-  usages:
-  - signing
-  - authentication
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: JoinConfiguration
+discovery:
+  tlsBootstrapToken: "lv9h5t.dsk5x4o9tcznifkl"
+  file:
+    kubeConfigPath: "/home/${user}/.kube/config"
 nodeRegistration:
   name: "${hostname}"
   kubeletExtraArgs:
-    cloud-provider: "gce"
----
-apiVersion: kubeadm.k8s.io/v1beta3
-kind: ClusterConfiguration
-kubernetesVersion: "$kubernetes_community_ami_version"
-apiServer:
-  timeoutForControlPlane: 4m0s
-  certSANs:
-  - "10.0.0.100"
-  extraArgs:
-    cloud-provider: "gce"
-    allow-privileged: "true"
-    feature-gates: ""
-clusterName: kubernetes
-controlPlaneEndpoint: "10.0.0.100:6443"
-controllerManager:
-  extraArgs:
-    cloud-provider: "gce"
-    allocate-node-cidrs: "false"
-networking:
-  podSubnet: 192.168.0.0/16
----
-apiVersion: kubelet.config.k8s.io/v1beta1
-kind: KubeletConfiguration
-cgroupDriver: systemd
-featureGates: {}
+    cloud-provider: gce
 EOF
 
-# https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/
-kubeadm config images pull
-kubeadm init --config /tmp/kubeadm.yaml
-export KUBECONFIG=/etc/kubernetes/admin.conf
-# Grant the "admin" user complete access to the cluster
-kubectl create clusterrolebinding admin-cluster-binding --clusterrole=cluster-admin --user=admin
-kubectl apply -f https://clouda-labs-assets.s3-us-west-2.amazonaws.com/k8s-common/${kubernetes_minor_version}/scripts/calico.yaml
-# Install the kubernetes dashboard by default
-kubectl apply -f https://clouda-labs-assets.s3-us-west-2.amazonaws.com/k8s-common/${kubernetes_minor_version}/scripts/recommended.yaml
-wget -O /tmp/metrics-server.zip https://github.com/cloudacademy/metrics-server/archive/${kubernetes_minor_version}.zip && \
-sudo apt install -y unzip && \
-unzip -q -d /tmp /tmp/metrics-server.zip && \
-kubectl apply -f /tmp/metrics-server-${kubernetes_minor_version}/deploy/1.8+/
+# Wait for control-plane node to signal
+gcloud beta runtime-config configs waiters wait control-plane-waiter --config-name k8s-config
+
 mkdir -p /home/${user}/.kube
-cp -i /etc/kubernetes/admin.conf /home/${user}/.kube/config
+gcloud beta runtime-config configs variables get-value --config-name k8s-config kubeconfig | base64 -d > /home/${user}/.kube/config
 chown -R ${user}:${user} /home/${user}/.kube
+
+# https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/
+kubeadm join 10.0.0.100:6443 --config /tmp/kubeadm-node.yaml
+
 echo 'source <(kubectl completion bash)
 alias k=kubectl
 complete -F __start_kubectl k'  >> /home/${user}/.bashrc
@@ -165,7 +126,3 @@ autocmd FileType yaml,yml setl indentkeys-=<:>
 
 :set paste
 EOF
-
-gcloud beta runtime-config configs variables set kubeconfig "$(cat /etc/kubernetes/admin.conf | base64 -w 0)" --config-name k8s-config --is-text
-gcloud beta runtime-config configs variables set join-command "$(kubeadm token create --print-join-command)" --config-name k8s-config --is-text
-gcloud beta runtime-config configs variables set /success/finished "success" --config-name k8s-config

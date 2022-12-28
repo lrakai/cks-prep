@@ -36,8 +36,29 @@ resource "google_compute_subnetwork" "cluster" {
   network       = google_compute_network.cks_network.id
 }
 
-resource "google_compute_firewall" "default" {
-  name    = "test-firewall"
+resource "google_compute_firewall" "cks-internal" {
+  name    = "cks-allow-local"
+  network = google_compute_network.cks_network.name
+
+  allow {
+    protocol = "icmp"
+  }
+
+  allow {
+    protocol = "tcp"
+    ports    = ["0-65535"]
+  }
+
+  allow {
+    protocol = "udp"
+    ports    = ["0-65535"]
+  }
+
+  source_ranges = ["10.0.0.0/16"]
+}
+
+resource "google_compute_firewall" "cks-source" {
+  name    = "cks-allow-ssh-from-source"
   network = google_compute_network.cks_network.name
 
   allow {
@@ -50,10 +71,6 @@ resource "google_compute_firewall" "default" {
   }
 
   source_ranges = ["${var.your_ip}/32"]
-}
-
-resource "google_compute_network" "default" {
-  name = "test-network"
 }
 
 resource "google_service_account" "k8s" {
@@ -76,16 +93,12 @@ resource "google_runtimeconfig_config" "k8s-config" {
   description = "Runtime configuration values for k8s initialization"
 }
 
-resource "google_runtimeconfig_variable" "join-command" {
-  provider = google-beta
-  parent   = google_runtimeconfig_config.k8s-config.name
-  name     = "join-command"
-  text     = "waiting"
-}
-
 resource "google_compute_instance" "control-plane" {
+  depends_on = [
+    google_runtimeconfig_config.k8s-config
+  ]
   name         = "control-plane"
-  machine_type = "e2-medium"
+  machine_type = var.machine_type
   zone         = var.zone
 
   boot_disk {
@@ -109,9 +122,53 @@ resource "google_compute_instance" "control-plane" {
   }
 
   metadata_startup_script = templatefile("${path.module}/templates/startup-control-plane.tftpl", { 
-      kubernetes_minor_version = "1.24",
-      kubernetes_community_ami_version = "1.24.3",
+      kubernetes_minor_version = var.kubernetes_minor_version,
+      kubernetes_community_ami_version = var.kubernetes_community_ami_version,
       hostname = "control-plane",  
+      user = var.user,
+      private_key = file("${path.module}/key/cluster"),
+      public_key = file("${path.module}/key/cluster.pub")
+    })
+
+  service_account {
+    email  = google_service_account.k8s.email
+    scopes = ["cloud-platform"]
+  }
+}
+
+resource "google_compute_instance" "worker" {  
+  depends_on = [
+    google_runtimeconfig_config.k8s-config
+  ]
+  for_each     = var.workers
+  name         = each.value.name
+  machine_type = var.machine_type
+  zone         = var.zone
+
+  boot_disk {
+    initialize_params {
+      image = "family/ubuntu-2004-lts"
+    }
+  }
+
+  network_interface {
+    subnetwork = google_compute_subnetwork.cluster.id
+    network_ip = each.value.ip
+
+    access_config {
+      // Ephemeral public IP
+    }
+  }
+
+  metadata = {
+    node-type = "worker"
+#    enable-oslogin = "TRUE"
+  }
+
+  metadata_startup_script = templatefile("${path.module}/templates/startup-worker.tftpl", { 
+      kubernetes_minor_version = var.kubernetes_minor_version,
+      kubernetes_community_ami_version = var.kubernetes_community_ami_version,
+      hostname = each.value.name,  
       user = var.user,
       private_key = file("${path.module}/key/cluster"),
       public_key = file("${path.module}/key/cluster.pub")
