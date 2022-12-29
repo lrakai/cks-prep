@@ -179,3 +179,45 @@ resource "google_compute_instance" "worker" {
     scopes = ["cloud-platform"]
   }
 }
+
+resource "google_compute_instance" "bastion" {  
+  depends_on = [
+    google_runtimeconfig_config.k8s-config
+  ]
+  name         = "bastion"
+  machine_type = var.bastion_machine_type
+  zone         = var.zone
+
+  boot_disk {
+    initialize_params {
+      image = "family/ubuntu-2004-lts"
+    }
+  }
+
+  network_interface {
+    subnetwork = google_compute_subnetwork.cluster.id
+
+    access_config {
+      // Ephemeral public IP
+    }
+  }
+
+  metadata = {
+    node-type = "bastion"
+#    enable-oslogin = "TRUE"
+  }
+
+  metadata_startup_script = templatefile("${path.module}/templates/startup-bastion.tftpl", { 
+      kubernetes_minor_version = var.kubernetes_minor_version,
+      kubernetes_community_ami_version = var.kubernetes_community_ami_version,
+      hostname = "bastion",  
+      user = var.user,
+      private_key = file("${path.module}/key/cluster"),
+      public_key = file("${path.module}/key/cluster.pub")
+    })
+
+  service_account {
+    email  = google_service_account.k8s.email
+    scopes = ["cloud-platform"]
+  }
+}

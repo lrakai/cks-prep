@@ -5,3 +5,7 @@ output "control_plane_ip" {
 output "control_plane_ssh_command" {
   value = "gcloud compute ssh --project=${var.project_id} --zone=${var.zone} control-plane"
 }
+
+output "bastion_ssh_command" {
+  value = "gcloud compute ssh --project=${var.project_id} --zone=${var.zone} bastion"
+}

@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -xe
+export kubernetes_minor_version=${kubernetes_minor_version}
+export kubernetes_community_ami_version=${kubernetes_community_ami_version}
+
+# https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
+apt-get update
+apt-get install -y apt-transport-https ca-certificates curl
+curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+apt-get update
+apt-get install -y kubectl=${kubernetes_community_ami_version}-00
+apt-mark hold kubectl
+
+# Bake ssh key auth
+mkdir -p /home/${user}/.ssh
+echo "${public_key}" >> /home/${user}/.ssh/authorized_keys
+cat << EOF > /home/${user}/.ssh/cluster.key
+${private_key}
+EOF
+cat << EOF > /home/${user}/.ssh/config
+Host control-plane
+    HostName 10.0.0.100
+Host worker1
+    HostName 10.0.0.10
+Host worker2
+    HostName 10.0.0.11
+Host worker3
+    HostName 10.0.0.12
+Host *
+    IdentityFile ~/.ssh/cluster.key
+EOF
+chown -R ${user}:${user} /home/${user}/.ssh/
+chmod -R 600 /home/${user}/.ssh/*
+chmod 755 /home/${user}/.ssh
+
+# Wait for control-plane node to signal
+gcloud beta runtime-config configs waiters wait control-plane-waiter --config-name k8s-config
+
+mkdir -p /home/${user}/.kube
+gcloud beta runtime-config configs variables get-value --config-name k8s-config kubeconfig | base64 -d > /home/${user}/.kube/config
+chown -R ${user}:${user} /home/${user}/.kube
+
+echo 'source <(kubectl completion bash)
+alias k=kubectl
+complete -F __start_kubectl k'  >> /home/${user}/.bashrc
+chown -R ${user}:${user} /home/${user}/.bashrc
+
+echo 'APT::Periodic::Enable "0";' > /etc/apt/apt.conf.d/10cloudinit-disable
+apt-get -y purge update-notifier-common ubuntu-release-upgrader-core landscape-common unattended-upgrades
+systemctl disable --now apt-daily.timer
+systemctl disable --now apt-daily-upgrade.timer
+# echo "Removed APT and Ubuntu garbage early" | systemd-cat
+echo "ClientAliveInterval 60" >> /etc/ssh/sshd_config
+echo "PrintLastLog no" >> /etc/ssh/sshd_config
+systemctl restart sshd.service
+rm -f /etc/update-motd.d/80-* /etc/update-motd.d/50-motd-news
+echo '#!/bin/sh' > /etc/update-motd.d/89-motd-ca
+echo 'printf "\nWelcome to the CKS environment\n"' >> /etc/update-motd.d/89-motd-ca
+chmod a+x /etc/update-motd.d/89-motd-ca
+cat <<EOF > /etc/vim/vimrc.local
+" Yaml file handling
+autocmd FileType yaml,yml setlocal ts=2 sts=2 sw=2 expandtab
+filetype plugin indent on
+autocmd FileType yaml,yml setl indentkeys-=<:>
+" Copy paste with ctr+c, ctr+v, etc
+:behave mswin
+:set clipboard=unnamedplus
+:smap <Del> <C-g>"_d
+:smap <C-c> <C-g>y
+:smap <C-x> <C-g>x
+:imap <C-v> <Esc>pi
+:smap <C-v> <C-g>p
+:smap <Tab> <C-g>1>
+:smap <S-Tab> <C-g>1<
+
+:set paste
+EOF

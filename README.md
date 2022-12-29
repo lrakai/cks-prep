@@ -16,7 +16,7 @@
     ssh-keygen -t rsa -q -f "infra/key/cluster" -N ""
     terraform -chdir=infra init
     terraform -chdir=infra apply -auto-approve -var your_ip=$(curl -s ifconfig.me) -var project_id=$GOOGLE_PROJECT -var user=$USER
-    echo -en "Connect with\n\n$(terraform -chdir=infra output -raw control_plane_ssh_command)\n\n"
+    echo -en "Connect with\n\n$(terraform -chdir=infra output -raw bastion_ssh_command)\n\n"
     ```
 
 ### Teardown

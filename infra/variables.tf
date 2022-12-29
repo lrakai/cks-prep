@@ -37,6 +37,11 @@ variable machine_type {
     default = "e2-medium"
 }
 
+variable bastion_machine_type {
+    type = string
+    default = "e2-medium"
+}
+
 variable "workers" {
     description = "Worker names"
     type = map
