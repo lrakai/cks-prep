@@ -120,7 +120,8 @@ kubeadm init --config /tmp/kubeadm.yaml
 export KUBECONFIG=/etc/kubernetes/admin.conf
 # Grant the "admin" user complete access to the cluster
 kubectl create clusterrolebinding admin-cluster-binding --clusterrole=cluster-admin --user=admin
-kubectl apply -f https://clouda-labs-assets.s3-us-west-2.amazonaws.com/k8s-common/${kubernetes_minor_version}/scripts/calico.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.24.5/manifests/tigera-operator.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.24.5/manifests/custom-resources.yaml
 # Install the kubernetes dashboard by default
 kubectl apply -f https://clouda-labs-assets.s3-us-west-2.amazonaws.com/k8s-common/${kubernetes_minor_version}/scripts/recommended.yaml
 wget -O /tmp/metrics-server.zip https://github.com/cloudacademy/metrics-server/archive/${kubernetes_minor_version}.zip && \
