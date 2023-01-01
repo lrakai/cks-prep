@@ -19,6 +19,18 @@
     echo -en "Connect with\n\n$(terraform -chdir=infra output -raw bastion_ssh_command)\n\n"
     ```
 
+### Stop
+
+```sh
+gcloud compute instances stop control-plane worker1 worker2 bastion --project=$GOOGLE_PROJECT --zone=us-central1-a
+```
+
+### Start
+
+```sh
+gcloud compute instances start control-plane worker1 worker2 bastion --project=$GOOGLE_PROJECT --zone=us-central1-a
+```
+
 ### Teardown
 
 ```sh
@@ -66,7 +78,7 @@ terraform -chdir=infra destroy -auto-approve -var your_ip=$(curl -s ifconfig.me)
         apiVersion: node.k8s.io/v1beta1
         kind: RuntimeClass
         metadata:
-        name: gvisor
+            name: gvisor
         handler: runsc
         ```
     - 'runtimeClassName:' of PodSpec
@@ -82,6 +94,7 @@ terraform -chdir=infra destroy -auto-approve -var your_ip=$(curl -s ifconfig.me)
 - Secure your supply chain: whitelist allowed image registries, sign and validate images
 - Use static analysis of user workloads (e.g. kubernetes resources, docker files)
 - Scan images for known vulnerabilities
+    - trivy image --severity CRITICAL,HIGH {image}
 
 ### 20% - Monitoring, Logging and Runtime Security
 - Perform behavioral analytics of syscall process and file activities at the host and container
@@ -91,3 +104,4 @@ terraform -chdir=infra destroy -auto-approve -var your_ip=$(curl -s ifconfig.me)
 - Perform deep analytical investigation and identification of bad actors within environment
 - Ensure immutability of containers at runtime
 - Use Audit Logs to monitor access
+    - https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
