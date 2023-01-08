@@ -67,6 +67,7 @@ terraform -chdir=infra destroy -auto-approve -var your_ip=$(curl -s ifconfig.me)
 - Minimize IAM roles
 - Minimize external access to the network
 - Appropriately use kernel hardening tools such as AppArmor, seccomp
+    - aa-enforce
 
 ### 20% - Minimize Microservice Vulnerabilities
 - Setup appropriate OS level security domains 
