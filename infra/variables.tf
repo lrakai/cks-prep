@@ -24,12 +24,12 @@ variable "zone" {
 
 variable "kubernetes_minor_version" {
     type = string
-    default = "1.24"
+    default = "1.29"
 }
 
 variable "kubernetes_community_ami_version" {
     type = string
-    default = "1.24.3"
+    default = "1.29.2"
 }
 
 variable machine_type {

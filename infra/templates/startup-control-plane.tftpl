@@ -33,20 +33,21 @@ echo \
   "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
   $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 apt-get update
-apt-get install -y containerd.io=1.4.4-1
+apt-get install -y containerd.io=1.6.28-1
 
 mkdir -p /etc/containerd
 containerd config default | sudo tee /etc/containerd/config.toml
-sed -i 's/          \[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options\]/          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]\n            SystemdCgroup = true/' /etc/containerd/config.toml
+sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
 systemctl restart containerd
 
 # https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
 apt-get update
 apt-get install -y apt-transport-https ca-certificates curl
-curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
-echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+mkdir -p -m 755 /etc/apt/keyrings
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v${kubernetes_minor_version}/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${kubernetes_minor_version}/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
 apt-get update
-apt-get install -y kubelet=${kubernetes_community_ami_version}-00 kubeadm=${kubernetes_community_ami_version}-00 kubectl=${kubernetes_community_ami_version}-00
+apt-get install -y kubelet=${kubernetes_community_ami_version}-1.1 kubeadm=${kubernetes_community_ami_version}-1.1 kubectl=${kubernetes_community_ami_version}-1.1
 apt-mark hold kubelet kubeadm kubectl
 
 # Bake ssh key auth
@@ -86,7 +87,7 @@ bootstrapTokens:
 nodeRegistration:
   name: "${hostname}"
   kubeletExtraArgs:
-    cloud-provider: "gce"
+    cloud-provider: "external"
 ---
 apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
@@ -96,7 +97,7 @@ apiServer:
   certSANs:
   - "10.0.0.100"
   extraArgs:
-    cloud-provider: "gce"
+    cloud-provider: "external"
     allow-privileged: "true"
     feature-gates: ""
 clusterName: kubernetes
@@ -120,14 +121,11 @@ kubeadm init --config /tmp/kubeadm.yaml
 export KUBECONFIG=/etc/kubernetes/admin.conf
 # Grant the "admin" user complete access to the cluster
 kubectl create clusterrolebinding admin-cluster-binding --clusterrole=cluster-admin --user=admin
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.24.5/manifests/tigera-operator.yaml
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.24.5/manifests/custom-resources.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/custom-resources.yaml
 # Install the kubernetes dashboard by default
 kubectl apply -f https://clouda-labs-assets.s3-us-west-2.amazonaws.com/k8s-common/${kubernetes_minor_version}/scripts/recommended.yaml
-wget -O /tmp/metrics-server.zip https://github.com/cloudacademy/metrics-server/archive/${kubernetes_minor_version}.zip && \
-sudo apt install -y unzip && \
-unzip -q -d /tmp /tmp/metrics-server.zip && \
-kubectl apply -f /tmp/metrics-server-${kubernetes_minor_version}/deploy/1.8+/
+kubectl apply -f https://github.com/cloudacademy/metrics-server/releases/download/${kubernetes_minor_version}/components.yaml
 mkdir -p /home/${user}/.kube
 cp -i /etc/kubernetes/admin.conf /home/${user}/.kube/config
 chown -R ${user}:${user} /home/${user}/.kube

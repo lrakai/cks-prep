@@ -6,10 +6,11 @@ export kubernetes_community_ami_version=${kubernetes_community_ami_version}
 # https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
 apt-get update
 apt-get install -y apt-transport-https ca-certificates curl
-curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
-echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+mkdir -p -m 755 /etc/apt/keyrings
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v${kubernetes_minor_version}/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${kubernetes_minor_version}/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
 apt-get update
-apt-get install -y kubectl=${kubernetes_community_ami_version}-00
+apt-get install -y kubectl=${kubernetes_community_ami_version}-1.1
 apt-mark hold kubectl
 
 # Bake ssh key auth
