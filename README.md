@@ -1,4 +1,6 @@
-## GCP Provisioning
+## GCP Provisioning a CKS exam-like cluster
+
+This repo sets up a full multi-node (1 control-plane node, multiple workers) kubernetes (k8s) cluster for practicing with while preparing for the Certified Kubernetes Security Specialist (CKS) exam.  It could also be used for preparing for the Certified Kubernetes Application Developer (CKAD) or Certified Kubernetes Administrator (CKA) exams.
 
 ### Setup
 
