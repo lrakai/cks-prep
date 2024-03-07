@@ -29,7 +29,7 @@ echo \
   "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
   $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 apt-get update
-apt-get install -y containerd.io=11.6.28-1 
+apt-get install -y containerd.io=1.6.28-1 
 
 mkdir -p /etc/containerd
 containerd config default | sudo tee /etc/containerd/config.toml
@@ -70,20 +70,27 @@ chmod 755 /home/${user}/.ssh
 
 cat >/tmp/kubeadm-node.yaml <<EOF
 ---
-apiVersion: kubeadm.k8s.io/v1beta2
+apiVersion: kubeadm.k8s.io/v1beta3
+caCertPath: /etc/kubernetes/pki/ca.crt
 kind: JoinConfiguration
 discovery:
   tlsBootstrapToken: "lv9h5t.dsk5x4o9tcznifkl"
   file:
     kubeConfigPath: "/home/${user}/.kube/config"
+  timeout: 5m0s
 nodeRegistration:
+  criSocket: unix:///var/run/containerd/containerd.sock
+  imagePullPolicy: IfNotPresent
   name: "${hostname}"
   kubeletExtraArgs:
-    cloud-provider: gce
+    cloud-provider: "gce"
 EOF
 
 # Wait for control-plane node to signal
-gcloud beta runtime-config configs waiters wait control-plane-waiter --config-name k8s-config
+while ! gcloud beta runtime-config configs waiters wait control-plane-waiter --config-name k8s-config ; do
+    echo "Waiting for control-plane node to signal"
+    sleep 2
+done
 
 mkdir -p /home/${user}/.kube
 gcloud beta runtime-config configs variables get-value --config-name k8s-config kubeconfig | base64 -d > /home/${user}/.kube/config

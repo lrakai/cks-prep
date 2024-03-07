@@ -36,7 +36,10 @@ chmod -R 600 /home/${user}/.ssh/*
 chmod 755 /home/${user}/.ssh
 
 # Wait for control-plane node to signal
-gcloud beta runtime-config configs waiters wait control-plane-waiter --config-name k8s-config
+while ! gcloud beta runtime-config configs waiters wait control-plane-waiter --config-name k8s-config ; do
+    echo "Waiting for control-plane node to signal"
+    sleep 2
+done
 
 mkdir -p /home/${user}/.kube
 gcloud beta runtime-config configs variables get-value --config-name k8s-config kubeconfig | base64 -d > /home/${user}/.kube/config

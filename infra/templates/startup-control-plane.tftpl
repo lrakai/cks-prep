@@ -85,9 +85,13 @@ bootstrapTokens:
   - signing
   - authentication
 nodeRegistration:
+  criSocket: unix:///var/run/containerd/containerd.sock
   name: "${hostname}"
   kubeletExtraArgs:
-    cloud-provider: "external"
+    cloud-provider: "gce"
+  taints: 
+    - key: "node-role.kubernetes.io/control-plane"
+      effect: "NoSchedule"
 ---
 apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
@@ -97,22 +101,25 @@ apiServer:
   certSANs:
   - "10.0.0.100"
   extraArgs:
-    cloud-provider: "external"
+    cloud-provider: "gce"
     allow-privileged: "true"
-    feature-gates: ""
+    feature-gates: "DisableCloudProviders=false,DisableKubeletCloudCredentialProviders=false"
 clusterName: kubernetes
 controlPlaneEndpoint: "10.0.0.100:6443"
 controllerManager:
   extraArgs:
     cloud-provider: "gce"
     allocate-node-cidrs: "false"
+    feature-gates: "DisableCloudProviders=false,DisableKubeletCloudCredentialProviders=false"
 networking:
   podSubnet: 192.168.0.0/16
 ---
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
 cgroupDriver: systemd
-featureGates: {}
+featureGates:
+  DisableCloudProviders: false
+  DisableKubeletCloudCredentialProviders: false
 EOF
 
 # https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/
@@ -123,6 +130,8 @@ export KUBECONFIG=/etc/kubernetes/admin.conf
 kubectl create clusterrolebinding admin-cluster-binding --clusterrole=cluster-admin --user=admin
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/custom-resources.yaml
+# # configure external cloud provider
+# kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-gcp/master/deploy/packages/default/manifest.yaml
 # Install the kubernetes dashboard by default
 kubectl apply -f https://clouda-labs-assets.s3-us-west-2.amazonaws.com/k8s-common/${kubernetes_minor_version}/scripts/recommended.yaml
 kubectl apply -f https://github.com/cloudacademy/metrics-server/releases/download/${kubernetes_minor_version}/components.yaml
